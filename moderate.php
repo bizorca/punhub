@@ -100,6 +100,17 @@ $msg      = $_GET['msg'] ?? '';
 $next     = $queue[0] ?? null;
 $remaining = count($queue);
 
+// Diagnostic info (visible only because page is key-gated)
+$diag = [
+    'queue_path'     => $queueFile,
+    'queue_exists'   => file_exists($queueFile),
+    'queue_writable' => is_writable($queueFile),
+    'queue_count'    => count($queue),
+    'first_id'       => $next['id'] ?? 'n/a',
+    'puns_writable'  => is_writable($punsFile) || !file_exists($punsFile),
+    'dir_writable'   => is_writable(__DIR__),
+];
+
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
@@ -194,6 +205,12 @@ $remaining = count($queue);
 
 <h1>PunHub Moderation</h1>
 <p class="meta"><?= $remaining ?> pending &nbsp;·&nbsp; <?= count($puns) ?> approved &nbsp;·&nbsp; <a href="index.php">View site</a></p>
+<p class="meta" style="font-size:0.75em;color:#bbb;">
+  queue: <?= $diag['queue_count'] ?> items &nbsp;|&nbsp;
+  first id: <?= htmlspecialchars((string)$diag['first_id']) ?> &nbsp;|&nbsp;
+  writable: <?= $diag['queue_writable'] ? 'yes' : 'NO' ?> &nbsp;|&nbsp;
+  dir: <?= $diag['dir_writable'] ? 'ok' : 'NO' ?>
+</p>
 
 <?php if ($msg): ?>
 <p class="notice <?= str_contains($msg, 'failed') || str_contains($msg, 'not found') ? 'err' : 'ok' ?>"><?= htmlspecialchars($msg) ?></p>
