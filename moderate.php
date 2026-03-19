@@ -9,6 +9,9 @@ if (!hash_equals(MOD_KEY, $providedKey)) {
     exit('403 Forbidden');
 }
 
+// Force OPcache to recompile this file on every request (admin-only page, no perf concern)
+if (function_exists('opcache_invalidate')) opcache_invalidate(__FILE__, true);
+
 $punsFile  = __DIR__ . '/puns.json';
 $queueFile = __DIR__ . '/queue.json';
 
@@ -209,11 +212,15 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 $queue = loadJson($queueFile);
 $puns  = loadJson($punsFile);
 
-// Filter queue: skip anything already in the approved pool
+// Filter queue: skip anything already in the approved pool, persist result to disk
 $approvedTexts = array_map(fn($p) => strtolower(trim($p['text'])), $puns);
-$queue = array_values(array_filter($queue, fn($item) =>
+$filtered = array_values(array_filter($queue, fn($item) =>
     !in_array(strtolower(trim($item['text'])), $approvedTexts)
 ));
+if (count($filtered) !== count($queue)) {
+    saveJson($queueFile, $filtered);
+}
+$queue = $filtered;
 
 usort($puns, fn($a, $b) => $b['votes'] <=> $a['votes']);
 
