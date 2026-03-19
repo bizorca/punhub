@@ -21,4 +21,4 @@ jobs:
             git stash 2>/dev/null || true
             git pull origin main
             git stash pop 2>/dev/null || true
-            git update-index --skip-worktree puns.json queue.json 2>/dev/null || true
+            git update-index --skip-worktree puns.json queue.json processed.json 2>/dev/null || true

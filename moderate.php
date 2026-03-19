@@ -12,8 +12,9 @@ if (!hash_equals(MOD_KEY, $providedKey)) {
 // Force OPcache to recompile this file on every request (admin-only page, no perf concern)
 if (function_exists('opcache_invalidate')) opcache_invalidate(__FILE__, true);
 
-$punsFile  = __DIR__ . '/puns.json';
-$queueFile = __DIR__ . '/queue.json';
+$punsFile      = __DIR__ . '/puns.json';
+$queueFile     = __DIR__ . '/queue.json';
+$processedFile = __DIR__ . '/processed.json';
 
 // ── Seed data — 100 clean puns, none overlapping the 15 already in puns.json ─
 $SEED_QUEUE = [
@@ -144,20 +145,19 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     $id     = (int)($_POST['id'] ?? 0);
 
     if ($action === 'approve' && $id > 0) {
-        $queue = loadJson($queueFile);
-        $puns  = loadJson($punsFile);
+        $queue     = loadJson($queueFile);
+        $puns      = loadJson($punsFile);
+        $processed = loadJson($processedFile);
         $found = false;
         foreach ($queue as $i => $item) {
             if ((int)$item['id'] === $id) {
-                $puns[] = [
-                    'id'    => nextId($puns),
-                    'text'  => $item['text'],
-                    'votes' => 0,
-                ];
+                $puns[] = ['id' => nextId($puns), 'text' => $item['text'], 'votes' => 0];
                 array_splice($queue, $i, 1);
+                $processed[] = $id;
                 $ok1 = saveJson($punsFile, $puns);
                 $ok2 = saveJson($queueFile, array_values($queue));
-                $msg = ($ok1 && $ok2) ? 'Approved.' : 'Save failed — check file permissions.';
+                $ok3 = saveJson($processedFile, array_values(array_unique($processed)));
+                $msg = ($ok1 && $ok2 && $ok3) ? 'Approved.' : 'Save failed — check file permissions.';
                 $found = true;
                 break;
             }
@@ -166,13 +166,16 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 
     if ($action === 'delete' && $id > 0) {
-        $queue = loadJson($queueFile);
+        $queue     = loadJson($queueFile);
+        $processed = loadJson($processedFile);
         $found = false;
         foreach ($queue as $i => $item) {
             if ((int)$item['id'] === $id) {
                 array_splice($queue, $i, 1);
-                $ok  = saveJson($queueFile, array_values($queue));
-                $msg = $ok ? 'Deleted.' : 'Save failed — check file permissions.';
+                $processed[] = $id;
+                $ok1 = saveJson($queueFile, array_values($queue));
+                $ok2 = saveJson($processedFile, array_values(array_unique($processed)));
+                $msg = ($ok1 && $ok2) ? 'Deleted.' : 'Save failed — check file permissions.';
                 $found = true;
                 break;
             }
@@ -181,13 +184,12 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 
     if ($action === 'reset_queue') {
-        $existing     = loadJson($punsFile);
-        $approvedText = array_map(fn($p) => normText($p['text']), $existing);
-        $filtered     = array_values(array_filter($SEED_QUEUE, fn($item) =>
-            !in_array(normText($item['text']), $approvedText)
+        $processed = loadJson($processedFile);
+        $filtered  = array_values(array_filter($SEED_QUEUE, fn($item) =>
+            !in_array((int)$item['id'], array_map('intval', $processed))
         ));
         $ok  = saveJson($queueFile, $filtered);
-        $msg = $ok ? 'Queue reset (' . count($filtered) . ' puns, already-approved excluded).' : 'Save failed — check file permissions.';
+        $msg = $ok ? 'Queue reset (' . count($filtered) . ' puns pending).' : 'Save failed — check file permissions.';
     }
 
     if ($action === 'delete_approved' && $id > 0) {
@@ -212,14 +214,11 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 $queue = loadJson($queueFile);
 $puns  = loadJson($punsFile);
 
-// Filter queue: skip anything already in the approved pool, persist result to disk
-// Normalize aggressively — strip all non-alphanumeric chars so apostrophe/encoding variants still match
-function normText(string $s): string {
-    return preg_replace('/[^a-z0-9]/i', '', strtolower($s));
-}
-$approvedNorm = array_map(fn($p) => normText($p['text']), $puns);
+// Filter queue by processed IDs — integer comparison, no text-matching fragility
+$processed    = loadJson($processedFile);
+$processedIds = array_map('intval', $processed);
 $filtered = array_values(array_filter($queue, fn($item) =>
-    !in_array(normText($item['text']), $approvedNorm)
+    !in_array((int)$item['id'], $processedIds)
 ));
 if (count($filtered) !== count($queue)) {
     saveJson($queueFile, $filtered);
