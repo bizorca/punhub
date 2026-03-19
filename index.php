@@ -1,6 +1,9 @@
 <?php
 declare(strict_types=1);
 
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
+
 $punsFile  = __DIR__ . '/puns.json';
 $queueFile = __DIR__ . '/queue.json';
 
@@ -40,7 +43,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
             unset($pun);
             saveJson($punsFile, $puns);
         }
-        header('Location: index.php?voted=1');
+        header('Location: index.php?voted=1&t=' . time());
         exit;
     }
 
@@ -58,7 +61,7 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
                 'submitted_at' => date('Y-m-d H:i:s'),
             ];
             saveJson($queueFile, $queue);
-            header('Location: index.php?submitted=1');
+            header('Location: index.php?submitted=1&t=' . time());
             exit;
         }
     }
