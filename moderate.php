@@ -182,9 +182,9 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
     if ($action === 'reset_queue') {
         $existing     = loadJson($punsFile);
-        $approvedText = array_map(fn($p) => strtolower(trim($p['text'])), $existing);
+        $approvedText = array_map(fn($p) => normText($p['text']), $existing);
         $filtered     = array_values(array_filter($SEED_QUEUE, fn($item) =>
-            !in_array(strtolower(trim($item['text'])), $approvedText)
+            !in_array(normText($item['text']), $approvedText)
         ));
         $ok  = saveJson($queueFile, $filtered);
         $msg = $ok ? 'Queue reset (' . count($filtered) . ' puns, already-approved excluded).' : 'Save failed — check file permissions.';
@@ -213,9 +213,13 @@ $queue = loadJson($queueFile);
 $puns  = loadJson($punsFile);
 
 // Filter queue: skip anything already in the approved pool, persist result to disk
-$approvedTexts = array_map(fn($p) => strtolower(trim($p['text'])), $puns);
+// Normalize aggressively — strip all non-alphanumeric chars so apostrophe/encoding variants still match
+function normText(string $s): string {
+    return preg_replace('/[^a-z0-9]/i', '', strtolower($s));
+}
+$approvedNorm = array_map(fn($p) => normText($p['text']), $puns);
 $filtered = array_values(array_filter($queue, fn($item) =>
-    !in_array(strtolower(trim($item['text'])), $approvedTexts)
+    !in_array(normText($item['text']), $approvedNorm)
 ));
 if (count($filtered) !== count($queue)) {
     saveJson($queueFile, $filtered);
