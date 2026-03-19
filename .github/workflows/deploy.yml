@@ -18,7 +18,7 @@ jobs:
           port: ${{ secrets.SSH_PORT }}
           script: |
             cd /home/customer/www/punhub.com/public_html
-            git update-index --no-skip-worktree queue.json 2>/dev/null || true
-            git checkout -- queue.json 2>/dev/null || true
+            git stash 2>/dev/null || true
             git pull origin main
+            git stash pop 2>/dev/null || true
             git update-index --skip-worktree puns.json queue.json 2>/dev/null || true
