@@ -1,6 +1,11 @@
 <?php
 declare(strict_types=1);
 
+// No caching — this page must always be fresh
+header('Cache-Control: no-store, no-cache, must-revalidate');
+header('Pragma: no-cache');
+header('Expires: 0');
+
 define('MOD_KEY', 'd4e8b3f1a06c927e5d2b84f1c39a07e6');
 
 $key = $_GET['key'] ?? '';
@@ -17,8 +22,9 @@ function loadJson(string $file): array {
     return json_decode(file_get_contents($file), true) ?? [];
 }
 
-function saveJson(string $file, array $data): void {
-    file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+function saveJson(string $file, array $data): bool {
+    $result = file_put_contents($file, json_encode($data, JSON_PRETTY_PRINT | JSON_UNESCAPED_UNICODE), LOCK_EX);
+    return $result !== false;
 }
 
 function nextId(array $items): int {
@@ -28,16 +34,20 @@ function nextId(array $items): int {
 
 // ── Handle POST ───────────────────────────────────────────────────────────────
 
+$error = '';
+
 if ($_SERVER['REQUEST_METHOD'] === 'POST') {
     $action = $_POST['action'] ?? '';
     $id     = (int)($_POST['id'] ?? 0);
 
     if ($id > 0 && in_array($action, ['approve', 'delete'])) {
         $queue = loadJson($queueFile);
+        $found = false;
 
         foreach ($queue as &$item) {
             if ((int)$item['id'] === $id) {
                 $item['status'] = $action === 'approve' ? 'approved' : 'deleted';
+                $found = true;
                 if ($action === 'approve') {
                     $puns   = loadJson($punsFile);
                     $puns[] = ['id' => nextId($puns), 'text' => $item['text'], 'votes' => 0];
@@ -48,11 +58,18 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
         }
         unset($item);
 
-        saveJson($queueFile, $queue);
+        if ($found) {
+            $ok = saveJson($queueFile, $queue);
+            if ($ok) {
+                // Timestamp busts any server-side page cache on the redirect
+                header('Location: moderate.php?key=' . MOD_KEY . '&t=' . time());
+                exit;
+            }
+            $error = 'Save failed. Check file permissions on queue.json.';
+        } else {
+            $error = 'Item not found (id=' . $id . ').';
+        }
     }
-
-    header('Location: moderate.php?key=' . MOD_KEY);
-    exit;
 }
 
 // ── Load data ─────────────────────────────────────────────────────────────────
@@ -60,28 +77,24 @@ if ($_SERVER['REQUEST_METHOD'] === 'POST') {
 $queue    = loadJson($queueFile);
 $pending  = array_values(array_filter($queue, fn($item) => ($item['status'] ?? 'pending') === 'pending'));
 $next     = $pending[0] ?? null;
-$nPending = count($pending);
-$nApproved = count(array_filter($queue, fn($item) => ($item['status'] ?? 'pending') === 'approved'));
+$nPending  = count($pending);
+$nApproved = count(array_filter($queue, fn($item) => ($item['status'] ?? '') === 'approved'));
 
 ?><!DOCTYPE html>
 <html lang="en">
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
+<meta http-equiv="Cache-Control" content="no-store, no-cache, must-revalidate">
 <title>PunHub — Moderation</title>
 <style>
   * { box-sizing: border-box; }
   body { font-family: sans-serif; margin: 0; padding: 32px 24px; background: #f5f5f5; color: #222; max-width: 600px; }
   h1 { color: #1c87c9; margin: 0 0 4px; }
   .meta { color: #888; font-size: 0.85em; margin-bottom: 28px; }
+  .error { background: #fdf2f2; color: #c0392b; border: 1px solid #f5b7b1; padding: 10px 16px; border-radius: 8px; margin-bottom: 16px; font-size: 0.9em; }
 
-  .card {
-    background: #fff;
-    border: 2px solid #1c87c9;
-    border-radius: 12px;
-    padding: 28px;
-    margin-bottom: 20px;
-  }
+  .card { background: #fff; border: 2px solid #1c87c9; border-radius: 12px; padding: 28px; margin-bottom: 20px; }
   .label { font-size: 0.75em; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; color: #1c87c9; margin-bottom: 12px; }
   .pun-text { font-size: 1.25em; font-style: italic; line-height: 1.5; margin-bottom: 20px; }
   .actions { display: flex; gap: 12px; }
@@ -90,7 +103,6 @@ $nApproved = count(array_filter($queue, fn($item) => ($item['status'] ?? 'pendin
   .approve:hover { background: #1e8449; }
   .delete  { background: #e74c3c; color: #fff; }
   .delete:hover  { background: #c0392b; }
-
   .empty { background: #fff; border: 2px dashed #ccc; border-radius: 12px; padding: 40px; text-align: center; color: #aaa; }
 </style>
 </head>
@@ -98,6 +110,10 @@ $nApproved = count(array_filter($queue, fn($item) => ($item['status'] ?? 'pendin
 
 <h1>PunHub Moderation</h1>
 <p class="meta"><?= $nPending ?> pending &nbsp;·&nbsp; <?= $nApproved ?> approved &nbsp;·&nbsp; <a href="index.php">View site</a></p>
+
+<?php if ($error): ?>
+<p class="error"><?= htmlspecialchars($error) ?></p>
+<?php endif; ?>
 
 <?php if ($next): ?>
 <div class="card">
