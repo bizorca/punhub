@@ -19,4 +19,4 @@ jobs:
           script: |
             cd /home/customer/www/punhub.com/public_html
             git pull origin main
-            git -C /var/www/punhub update-index --skip-worktree puns.json queue.json 2>/dev/null || true
+            git -C /home/customer/www/punhub.com/public_html update-index --skip-worktree puns.json queue.json 2>/dev/null || true
