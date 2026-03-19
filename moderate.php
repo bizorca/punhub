@@ -4,7 +4,7 @@ declare(strict_types=1);
 // ── Set your secret key here ──────────────────────────────────────────────────
 // Visit: https://punhub.com/moderate.php?key=7f2e9a1c8b3d4f5e0c6a2b9d1e3f8a4c
 // Change this to something only you know before deploying.
-define('MOD_KEY', 'CHANGE_THIS_BEFORE_DEPLOY');
+define('7f2e9a1c8b3d4f5e0c6a2b9d1e3f8a4c', 'CHANGE_THIS_BEFORE_DEPLOY');
 // ─────────────────────────────────────────────────────────────────────────────
 
 $providedKey = $_GET['key'] ?? $_POST['key'] ?? '';
