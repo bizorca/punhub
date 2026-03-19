@@ -178,8 +178,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
     }
 
     if ($action === 'reset_queue') {
-        $ok  = saveJson($queueFile, array_values($SEED_QUEUE));
-        $msg = $ok ? 'Queue reset to 100 seed puns.' : 'Save failed — check file permissions.';
+        $existing     = loadJson($punsFile);
+        $approvedText = array_map(fn($p) => strtolower(trim($p['text'])), $existing);
+        $filtered     = array_values(array_filter($SEED_QUEUE, fn($item) =>
+            !in_array(strtolower(trim($item['text'])), $approvedText)
+        ));
+        $ok  = saveJson($queueFile, $filtered);
+        $msg = $ok ? 'Queue reset (' . count($filtered) . ' puns, already-approved excluded).' : 'Save failed — check file permissions.';
     }
 
     if ($action === 'delete_approved' && $id > 0) {
@@ -203,6 +208,13 @@ if (($_SERVER['REQUEST_METHOD'] ?? '') === 'POST') {
 
 $queue = loadJson($queueFile);
 $puns  = loadJson($punsFile);
+
+// Filter queue: skip anything already in the approved pool
+$approvedTexts = array_map(fn($p) => strtolower(trim($p['text'])), $puns);
+$queue = array_values(array_filter($queue, fn($item) =>
+    !in_array(strtolower(trim($item['text'])), $approvedTexts)
+));
+
 usort($puns, fn($a, $b) => $b['votes'] <=> $a['votes']);
 
 $msg      = $_GET['msg'] ?? '';
